@@ -257,9 +257,9 @@ class RankPilot_Public {
 		echo '<meta property="og:site_name" content="' . esc_attr( $sitename ) . '">' . "\n";
 		if ( $image ) {
 			echo '<meta property="og:image" content="' . esc_url( $image ) . '">' . "\n";
-			$img_data = wp_get_attachment_by_url( $image );
-			if ( $img_data ) {
-				$meta = wp_get_attachment_metadata( $img_data );
+			$img_post_id = attachment_url_to_postid( $image );
+			if ( $img_post_id ) {
+				$meta = wp_get_attachment_metadata( $img_post_id );
 				if ( $meta && isset( $meta['width'], $meta['height'] ) ) {
 					echo '<meta property="og:image:width" content="' . absint( $meta['width'] ) . '">' . "\n";
 					echo '<meta property="og:image:height" content="' . absint( $meta['height'] ) . '">' . "\n";
