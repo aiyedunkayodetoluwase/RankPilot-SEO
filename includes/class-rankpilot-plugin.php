@@ -26,6 +26,19 @@ class RankPilot_Plugin {
 	public function init() {
 		$this->load_classes();
 		$this->boot_classes();
+		$this->maybe_flush_rewrite_rules();
+	}
+
+	/**
+	 * Flush rewrite rules once whenever the plugin version changes.
+	 * Ensures sitemap URLs work after updates done without deactivation.
+	 */
+	private function maybe_flush_rewrite_rules() {
+		$flushed_version = get_option( 'rp_seo_flushed_version', '' );
+		if ( $flushed_version !== RP_SEO_VERSION ) {
+			flush_rewrite_rules( false );
+			update_option( 'rp_seo_flushed_version', RP_SEO_VERSION );
+		}
 	}
 
 	private function load_classes() {
