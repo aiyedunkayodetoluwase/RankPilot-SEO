@@ -119,18 +119,200 @@
 
 		<div class="rp-seo-card">
 			<h2><?php esc_html_e( 'AI Content Generation', 'rankpilot-seo' ); ?></h2>
-			<p class="description"><?php esc_html_e( 'Connect your Anthropic API key to enable AI-powered title and description generation directly in the editor.', 'rankpilot-seo' ); ?></p>
+			<p class="description">
+				<?php esc_html_e( 'Enables AI-powered SEO title and meta description generation in the post editor. Choose a free or paid AI provider below.', 'rankpilot-seo' ); ?>
+			</p>
+			<?php
+			$ai_provider = $g['ai_provider'] ?? 'groq';
+			$ai_model    = $g['ai_model'] ?? '';
+			$ai_key      = $g['ai_api_key'] ?? '';
+			$ollama_url  = $g['ollama_url'] ?? 'http://localhost:11434';
+
+			$providers = array(
+				'none'        => __( '— Disabled (use rule-based fallback) —', 'rankpilot-seo' ),
+				'groq'        => __( 'Groq (FREE — llama-3.3-70b — 14,400 req/day)', 'rankpilot-seo' ),
+				'gemini'      => __( 'Google Gemini (FREE — gemini-1.5-flash — 1M tokens/day)', 'rankpilot-seo' ),
+				'huggingface' => __( 'Hugging Face (FREE — no key required for public models)', 'rankpilot-seo' ),
+				'ollama'      => __( 'Ollama (FREE — runs locally on your server)', 'rankpilot-seo' ),
+				'anthropic'   => __( 'Anthropic Claude (Paid)', 'rankpilot-seo' ),
+				'openai'      => __( 'OpenAI (Paid)', 'rankpilot-seo' ),
+			);
+
+			$provider_info = array(
+				'groq'        => array(
+					'get_key'    => 'https://console.groq.com',
+					'models'     => 'llama-3.3-70b-versatile, llama3-8b-8192, mixtral-8x7b-32768',
+					'default'    => 'llama-3.3-70b-versatile',
+					'needs_key'  => true,
+					'key_hint'   => 'gsk_...',
+					'needs_ollama_url' => false,
+				),
+				'gemini'      => array(
+					'get_key'    => 'https://aistudio.google.com/app/apikey',
+					'models'     => 'gemini-1.5-flash, gemini-1.5-pro, gemini-2.0-flash-exp',
+					'default'    => 'gemini-1.5-flash',
+					'needs_key'  => true,
+					'key_hint'   => 'AIza...',
+					'needs_ollama_url' => false,
+				),
+				'huggingface' => array(
+					'get_key'    => 'https://huggingface.co/settings/tokens',
+					'models'     => 'mistralai/Mistral-7B-Instruct-v0.3, meta-llama/Meta-Llama-3-8B-Instruct',
+					'default'    => 'mistralai/Mistral-7B-Instruct-v0.3',
+					'needs_key'  => false,
+					'key_hint'   => 'hf_... (optional — increases rate limits)',
+					'needs_ollama_url' => false,
+				),
+				'ollama'      => array(
+					'get_key'    => 'https://ollama.com',
+					'models'     => 'llama3.2, llama3.1, mistral, phi3, qwen2.5',
+					'default'    => 'llama3.2',
+					'needs_key'  => false,
+					'key_hint'   => '',
+					'needs_ollama_url' => true,
+				),
+				'anthropic'   => array(
+					'get_key'    => 'https://console.anthropic.com',
+					'models'     => 'claude-haiku-4-5-20251001, claude-3-5-haiku-20241022',
+					'default'    => 'claude-haiku-4-5-20251001',
+					'needs_key'  => true,
+					'key_hint'   => 'sk-ant-...',
+					'needs_ollama_url' => false,
+				),
+				'openai'      => array(
+					'get_key'    => 'https://platform.openai.com/api-keys',
+					'models'     => 'gpt-4o-mini, gpt-4o, gpt-3.5-turbo',
+					'default'    => 'gpt-4o-mini',
+					'needs_key'  => true,
+					'key_hint'   => 'sk-...',
+					'needs_ollama_url' => false,
+				),
+				'none'        => array( 'needs_key' => false, 'needs_ollama_url' => false, 'models' => '', 'default' => '' ),
+			);
+			?>
 			<table class="form-table">
 				<tr>
-					<th><label for="rp_ai_key"><?php esc_html_e( 'Anthropic API Key', 'rankpilot-seo' ); ?></label></th>
+					<th><label for="rp_ai_provider"><?php esc_html_e( 'AI Provider', 'rankpilot-seo' ); ?></label></th>
+					<td>
+						<select id="rp_ai_provider" name="rp_seo_general[ai_provider]" onchange="rpSeoToggleAiFields(this.value)">
+							<?php foreach ( $providers as $val => $label ) : ?>
+								<option value="<?php echo esc_attr( $val ); ?>"<?php selected( $ai_provider, $val ); ?>><?php echo esc_html( $label ); ?></option>
+							<?php endforeach; ?>
+						</select>
+						<p class="description" id="rp_ai_provider_hint"></p>
+					</td>
+				</tr>
+				<tr id="rp_ai_model_row">
+					<th><label for="rp_ai_model"><?php esc_html_e( 'Model', 'rankpilot-seo' ); ?></label></th>
+					<td>
+						<input type="text" id="rp_ai_model" name="rp_seo_general[ai_model]"
+							value="<?php echo esc_attr( $ai_model ); ?>" class="regular-text" placeholder="leave blank for default">
+						<p class="description" id="rp_ai_model_hint"><?php esc_html_e( 'Leave blank to use the recommended default model for the selected provider.', 'rankpilot-seo' ); ?></p>
+					</td>
+				</tr>
+				<tr id="rp_ai_key_row">
+					<th><label for="rp_ai_key"><?php esc_html_e( 'API Key', 'rankpilot-seo' ); ?></label></th>
 					<td>
 						<input type="password" id="rp_ai_key" name="rp_seo_general[ai_api_key]"
-							value="<?php echo esc_attr( $g['ai_api_key'] ?? '' ); ?>" class="regular-text"
-							autocomplete="off" placeholder="sk-ant-...">
-						<p class="description"><?php esc_html_e( 'Used only for AI title/description generation from the post editor. Never shared.', 'rankpilot-seo' ); ?></p>
+							value="<?php echo esc_attr( $ai_key ); ?>" class="regular-text"
+							autocomplete="off" id="rp_ai_key_input">
+						<p class="description" id="rp_ai_getkey_hint"></p>
+						<p class="description"><?php esc_html_e( 'Your API key is stored in WordPress and never exposed publicly.', 'rankpilot-seo' ); ?></p>
+					</td>
+				</tr>
+				<tr id="rp_ollama_url_row" style="display:none">
+					<th><label for="rp_ollama_url"><?php esc_html_e( 'Ollama Server URL', 'rankpilot-seo' ); ?></label></th>
+					<td>
+						<input type="url" id="rp_ollama_url" name="rp_seo_general[ollama_url]"
+							value="<?php echo esc_attr( $ollama_url ); ?>" class="regular-text" placeholder="http://localhost:11434">
+						<p class="description"><?php esc_html_e( 'URL to your Ollama instance. Default is localhost — use a full URL if Ollama is on a different server.', 'rankpilot-seo' ); ?></p>
+					</td>
+				</tr>
+				<tr id="rp_ai_test_row">
+					<th><?php esc_html_e( 'Test Connection', 'rankpilot-seo' ); ?></th>
+					<td>
+						<button type="button" id="rp_ai_test_btn" class="button button-secondary"
+							onclick="rpSeoTestAi()"><?php esc_html_e( 'Test AI Connection', 'rankpilot-seo' ); ?></button>
+						<span id="rp_ai_test_result" style="margin-left:10px;font-style:italic;"></span>
+						<p class="description"><?php esc_html_e( 'Sends a quick test prompt to verify your configuration works. Save settings first.', 'rankpilot-seo' ); ?></p>
 					</td>
 				</tr>
 			</table>
+
+			<script>
+			var rpSeoProviderInfo = <?php echo wp_json_encode( $provider_info ); ?>;
+
+			function rpSeoToggleAiFields( provider ) {
+				var info       = rpSeoProviderInfo[ provider ] || {};
+				var needsKey   = info.needs_key;
+				var needsOllama = info.needs_ollama_url;
+				var models     = info.models || '';
+				var getKey     = info.get_key || '';
+
+				// Key row
+				document.getElementById('rp_ai_key_row').style.display    = ( needsKey || (!needsOllama && provider !== 'none') ) ? '' : 'none';
+				document.getElementById('rp_ai_key_input').placeholder     = info.key_hint || '';
+				document.getElementById('rp_ai_getkey_hint').innerHTML     = getKey
+					? '<?php esc_html_e( 'Get a free API key at:', 'rankpilot-seo' ); ?> <a href="' + getKey + '" target="_blank" rel="noopener">' + getKey + '</a>'
+					: '';
+
+				// Ollama URL row
+				document.getElementById('rp_ollama_url_row').style.display = needsOllama ? '' : 'none';
+
+				// Model hint
+				document.getElementById('rp_ai_model_hint').textContent = models
+					? '<?php esc_html_e( 'Available models:', 'rankpilot-seo' ); ?> ' + models
+					: '';
+				document.getElementById('rp_ai_model_row').style.display = provider !== 'none' ? '' : 'none';
+				document.getElementById('rp_ai_test_row').style.display  = provider !== 'none' ? '' : 'none';
+
+				// Provider hint
+				var hintEl = document.getElementById('rp_ai_provider_hint');
+				if ( provider === 'huggingface' ) {
+					hintEl.textContent = '<?php esc_html_e( 'No API key required for public models. Add a key to increase rate limits.', 'rankpilot-seo' ); ?>';
+				} else if ( provider === 'ollama' ) {
+					hintEl.textContent = '<?php esc_html_e( 'Ollama must be running on your WordPress server. Completely free and unlimited.', 'rankpilot-seo' ); ?>';
+				} else {
+					hintEl.textContent = '';
+				}
+			}
+
+			function rpSeoTestAi() {
+				var btn    = document.getElementById('rp_ai_test_btn');
+				var result = document.getElementById('rp_ai_test_result');
+				btn.disabled = true;
+				result.textContent = '<?php esc_html_e( 'Testing…', 'rankpilot-seo' ); ?>';
+
+				fetch( '<?php echo esc_url( rest_url( 'rankpilot/v1/ai-test' ) ); ?>', {
+					method  : 'POST',
+					headers : {
+						'Content-Type' : 'application/json',
+						'X-WP-Nonce'   : '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>',
+					},
+					body : JSON.stringify({}),
+				} )
+				.then( function(r) { return r.json(); } )
+				.then( function(data) {
+					if ( data.success ) {
+						result.style.color   = '#00a32a';
+						result.textContent   = '✓ <?php esc_html_e( 'Connected! Sample:', 'rankpilot-seo' ); ?> ' + data.sample;
+					} else {
+						result.style.color   = '#d63638';
+						result.textContent   = '✗ ' + ( data.error || '<?php esc_html_e( 'Connection failed', 'rankpilot-seo' ); ?>' );
+					}
+				} )
+				.catch( function(e) {
+					result.style.color   = '#d63638';
+					result.textContent   = '✗ ' + e.message;
+				} )
+				.finally( function() { btn.disabled = false; } );
+			}
+
+			// Init on page load
+			document.addEventListener('DOMContentLoaded', function() {
+				rpSeoToggleAiFields( document.getElementById('rp_ai_provider').value );
+			});
+			</script>
 		</div>
 
 		<?php submit_button( __( 'Save Settings', 'rankpilot-seo' ) ); ?>

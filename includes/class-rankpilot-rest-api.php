@@ -80,7 +80,18 @@ class RankPilot_REST_API {
 				'permission_callback' => function() { return current_user_can( 'manage_options' ); },
 			),
 		) );
+
+		// Test AI connection endpoint
+		register_rest_route( 'rankpilot/v1', '/ai-test', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'test_ai_connection' ),
+			'permission_callback' => function() { return current_user_can( 'manage_options' ); },
+		) );
 	}
+
+	// ──────────────────────────────────────────
+	// GENERATE CONTENT
+	// ──────────────────────────────────────────
 
 	public function generate_content( $request ) {
 		$post_id       = $request->get_param( 'post_id' );
@@ -97,39 +108,251 @@ class RankPilot_REST_API {
 		}
 
 		$general  = get_option( 'rp_seo_general', array() );
-		$ai_key   = isset( $general['ai_api_key'] ) ? $general['ai_api_key'] : '';
+		$provider = isset( $general['ai_provider'] ) ? $general['ai_provider'] : 'none';
+		$api_key  = isset( $general['ai_api_key'] ) ? $general['ai_api_key'] : '';
 
-		// Use Claude API if configured
-		if ( $ai_key ) {
-			$result = $this->call_ai_api( $ai_key, $post, $type, $focus_keyword );
-			if ( ! is_wp_error( $result ) ) {
-				return rest_ensure_response( array( 'generated' => $result ) );
-			}
+		$prompt = $this->build_prompt( $post, $type, $focus_keyword );
+
+		// Try configured provider
+		$result = $this->call_provider( $provider, $api_key, $prompt, $general );
+
+		if ( ! is_wp_error( $result ) && $result ) {
+			return rest_ensure_response( array(
+				'generated' => $result,
+				'provider'  => $provider,
+			) );
 		}
 
 		// Fallback: rule-based generation
 		$generated = $this->generate_fallback( $post, $type, $focus_keyword );
-		return rest_ensure_response( array( 'generated' => $generated, 'notice' => __( 'AI API not configured. Generated using basic rules.', 'rankpilot-seo' ) ) );
+		return rest_ensure_response( array(
+			'generated' => $generated,
+			'provider'  => 'fallback',
+			'notice'    => is_wp_error( $result )
+				? $result->get_error_message()
+				: __( 'No AI provider configured. Using basic rule-based generation.', 'rankpilot-seo' ),
+		) );
 	}
 
-	private function call_ai_api( $api_key, $post, $type, $focus_keyword ) {
+	// ──────────────────────────────────────────
+	// PROMPT BUILDER
+	// ──────────────────────────────────────────
+
+	private function build_prompt( $post, $type, $focus_keyword ) {
 		$content = wp_strip_all_tags( $post->post_content );
 		$content = substr( $content, 0, 2000 );
+		$title   = wp_strip_all_tags( $post->post_title );
+		$kw      = $focus_keyword ? "Focus keyword: {$focus_keyword}." : '';
 
 		if ( 'title' === $type ) {
-			$prompt = sprintf(
-				"Write a compelling SEO title for a webpage. The page is about: %s. Focus keyword: %s. Requirements: max 60 characters, include the focus keyword naturally, be specific and engaging. Output only the title, no quotes.",
-				wp_strip_all_tags( $post->post_title ),
-				$focus_keyword
-			);
-		} else {
-			$prompt = sprintf(
-				"Write a compelling meta description for this page. Title: %s. Content excerpt: %s. Focus keyword: %s. Requirements: 120-158 characters, include the focus keyword, entice clicks from search results. Output only the description, no quotes.",
-				wp_strip_all_tags( $post->post_title ),
-				$content,
-				$focus_keyword
-			);
+			return "Write a compelling SEO title for a webpage.\nPage title: {$title}\n{$kw}\nRequirements: maximum 60 characters, include the focus keyword naturally, be specific and engaging.\nOutput ONLY the title text, no quotes, no explanation.";
 		}
+
+		return "Write a compelling meta description for this page.\nPage title: {$title}\nContent excerpt: {$content}\n{$kw}\nRequirements: 120-158 characters total, include the focus keyword, entice clicks from search results, end with a call to action.\nOutput ONLY the description text, no quotes, no explanation.";
+	}
+
+	// ──────────────────────────────────────────
+	// PROVIDER DISPATCHER
+	// ──────────────────────────────────────────
+
+	private function call_provider( $provider, $api_key, $prompt, $general ) {
+		switch ( $provider ) {
+			case 'groq':
+				return $this->call_groq( $api_key, $prompt, $general );
+
+			case 'gemini':
+				return $this->call_gemini( $api_key, $prompt, $general );
+
+			case 'huggingface':
+				return $this->call_huggingface( $api_key, $prompt, $general );
+
+			case 'ollama':
+				return $this->call_ollama( $prompt, $general );
+
+			case 'anthropic':
+				return $this->call_anthropic( $api_key, $prompt, $general );
+
+			case 'openai':
+				return $this->call_openai( $api_key, $prompt, $general );
+
+			default:
+				return new WP_Error( 'no_provider', __( 'No AI provider selected.', 'rankpilot-seo' ) );
+		}
+	}
+
+	// ──────────────────────────────────────────
+	// GROQ  (Free — https://console.groq.com)
+	// Models: llama-3.3-70b-versatile, llama3-8b-8192, mixtral-8x7b-32768
+	// ──────────────────────────────────────────
+
+	private function call_groq( $api_key, $prompt, $general ) {
+		if ( ! $api_key ) {
+			return new WP_Error( 'no_key', __( 'Groq API key not configured.', 'rankpilot-seo' ) );
+		}
+
+		$model = isset( $general['ai_model'] ) && $general['ai_model'] ? $general['ai_model'] : 'llama-3.3-70b-versatile';
+
+		$response = wp_remote_post( 'https://api.groq.com/openai/v1/chat/completions', array(
+			'timeout' => 30,
+			'headers' => array(
+				'Authorization' => 'Bearer ' . $api_key,
+				'Content-Type'  => 'application/json',
+			),
+			'body' => wp_json_encode( array(
+				'model'       => $model,
+				'max_tokens'  => 200,
+				'temperature' => 0.7,
+				'messages'    => array(
+					array( 'role' => 'system', 'content' => 'You are an expert SEO copywriter. Always follow the exact character limits specified.' ),
+					array( 'role' => 'user',   'content' => $prompt ),
+				),
+			) ),
+		) );
+
+		return $this->parse_openai_response( $response );
+	}
+
+	// ──────────────────────────────────────────
+	// GOOGLE GEMINI  (Free — https://aistudio.google.com)
+	// Model: gemini-1.5-flash (free tier: 15 RPM, 1M tokens/day)
+	// ──────────────────────────────────────────
+
+	private function call_gemini( $api_key, $prompt, $general ) {
+		if ( ! $api_key ) {
+			return new WP_Error( 'no_key', __( 'Google Gemini API key not configured.', 'rankpilot-seo' ) );
+		}
+
+		$model = isset( $general['ai_model'] ) && $general['ai_model'] ? $general['ai_model'] : 'gemini-1.5-flash';
+		$url   = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$api_key}";
+
+		$response = wp_remote_post( $url, array(
+			'timeout' => 30,
+			'headers' => array( 'Content-Type' => 'application/json' ),
+			'body'    => wp_json_encode( array(
+				'contents'         => array(
+					array( 'parts' => array( array( 'text' => $prompt ) ) ),
+				),
+				'generationConfig' => array(
+					'maxOutputTokens' => 200,
+					'temperature'     => 0.7,
+				),
+			) ),
+		) );
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( 200 !== $code ) {
+			$msg = isset( $body['error']['message'] ) ? $body['error']['message'] : "Gemini API error ({$code})";
+			return new WP_Error( 'gemini_error', $msg );
+		}
+
+		$text = $body['candidates'][0]['content']['parts'][0]['text'] ?? '';
+		return $text ? trim( $text ) : new WP_Error( 'empty_response', 'Gemini returned an empty response.' );
+	}
+
+	// ──────────────────────────────────────────
+	// HUGGING FACE  (Free — https://huggingface.co)
+	// No API key required for public inference endpoint.
+	// ──────────────────────────────────────────
+
+	private function call_huggingface( $api_key, $prompt, $general ) {
+		$model   = isset( $general['ai_model'] ) && $general['ai_model'] ? $general['ai_model'] : 'mistralai/Mistral-7B-Instruct-v0.3';
+		$hf_url  = "https://api-inference.huggingface.co/models/{$model}";
+
+		$headers = array( 'Content-Type' => 'application/json' );
+		if ( $api_key ) {
+			$headers['Authorization'] = 'Bearer ' . $api_key;
+		}
+
+		$response = wp_remote_post( $hf_url, array(
+			'timeout' => 60,
+			'headers' => $headers,
+			'body'    => wp_json_encode( array(
+				'inputs'     => "<s>[INST] {$prompt} [/INST]",
+				'parameters' => array(
+					'max_new_tokens' => 200,
+					'temperature'    => 0.7,
+					'return_full_text' => false,
+				),
+			) ),
+		) );
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( 503 === $code ) {
+			return new WP_Error( 'model_loading', __( 'Model is loading, please try again in 20 seconds.', 'rankpilot-seo' ) );
+		}
+
+		if ( 200 !== $code ) {
+			$msg = isset( $body['error'] ) ? $body['error'] : "Hugging Face API error ({$code})";
+			return new WP_Error( 'hf_error', $msg );
+		}
+
+		$text = $body[0]['generated_text'] ?? '';
+		return $text ? trim( $text ) : new WP_Error( 'empty_response', 'Hugging Face returned an empty response.' );
+	}
+
+	// ──────────────────────────────────────────
+	// OLLAMA  (Free — https://ollama.com, runs locally on your server)
+	// Requires Ollama installed on the WordPress server.
+	// ──────────────────────────────────────────
+
+	private function call_ollama( $prompt, $general ) {
+		$base_url = isset( $general['ollama_url'] ) && $general['ollama_url']
+			? trailingslashit( $general['ollama_url'] )
+			: 'http://localhost:11434/';
+		$model    = isset( $general['ai_model'] ) && $general['ai_model'] ? $general['ai_model'] : 'llama3.2';
+
+		$response = wp_remote_post( $base_url . 'api/generate', array(
+			'timeout' => 120,
+			'headers' => array( 'Content-Type' => 'application/json' ),
+			'body'    => wp_json_encode( array(
+				'model'  => $model,
+				'prompt' => $prompt,
+				'stream' => false,
+				'options' => array(
+					'num_predict' => 200,
+					'temperature' => 0.7,
+				),
+			) ),
+		) );
+
+		if ( is_wp_error( $response ) ) {
+			return new WP_Error( 'ollama_error', __( 'Could not connect to Ollama. Is it running on the server?', 'rankpilot-seo' ) );
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( 200 !== $code ) {
+			$msg = isset( $body['error'] ) ? $body['error'] : "Ollama error ({$code})";
+			return new WP_Error( 'ollama_error', $msg );
+		}
+
+		$text = $body['response'] ?? '';
+		return $text ? trim( $text ) : new WP_Error( 'empty_response', 'Ollama returned an empty response.' );
+	}
+
+	// ──────────────────────────────────────────
+	// ANTHROPIC CLAUDE  (Paid — https://console.anthropic.com)
+	// ──────────────────────────────────────────
+
+	private function call_anthropic( $api_key, $prompt, $general ) {
+		if ( ! $api_key ) {
+			return new WP_Error( 'no_key', __( 'Anthropic API key not configured.', 'rankpilot-seo' ) );
+		}
+
+		$model = isset( $general['ai_model'] ) && $general['ai_model'] ? $general['ai_model'] : 'claude-haiku-4-5-20251001';
 
 		$response = wp_remote_post( 'https://api.anthropic.com/v1/messages', array(
 			'timeout' => 30,
@@ -139,7 +362,7 @@ class RankPilot_REST_API {
 				'content-type'      => 'application/json',
 			),
 			'body' => wp_json_encode( array(
-				'model'      => 'claude-haiku-4-5-20251001',
+				'model'      => $model,
 				'max_tokens' => 200,
 				'messages'   => array(
 					array( 'role' => 'user', 'content' => $prompt ),
@@ -151,13 +374,100 @@ class RankPilot_REST_API {
 			return $response;
 		}
 
+		$code = wp_remote_retrieve_response_code( $response );
 		$body = json_decode( wp_remote_retrieve_body( $response ), true );
-		if ( isset( $body['content'][0]['text'] ) ) {
-			return trim( $body['content'][0]['text'] );
+
+		if ( 200 !== $code ) {
+			$msg = isset( $body['error']['message'] ) ? $body['error']['message'] : "Anthropic API error ({$code})";
+			return new WP_Error( 'anthropic_error', $msg );
 		}
 
-		return new WP_Error( 'api_error', 'AI API error' );
+		$text = $body['content'][0]['text'] ?? '';
+		return $text ? trim( $text ) : new WP_Error( 'empty_response', 'Claude returned an empty response.' );
 	}
+
+	// ──────────────────────────────────────────
+	// OPENAI  (Paid — https://platform.openai.com)
+	// ──────────────────────────────────────────
+
+	private function call_openai( $api_key, $prompt, $general ) {
+		if ( ! $api_key ) {
+			return new WP_Error( 'no_key', __( 'OpenAI API key not configured.', 'rankpilot-seo' ) );
+		}
+
+		$model = isset( $general['ai_model'] ) && $general['ai_model'] ? $general['ai_model'] : 'gpt-4o-mini';
+
+		$response = wp_remote_post( 'https://api.openai.com/v1/chat/completions', array(
+			'timeout' => 30,
+			'headers' => array(
+				'Authorization' => 'Bearer ' . $api_key,
+				'Content-Type'  => 'application/json',
+			),
+			'body' => wp_json_encode( array(
+				'model'       => $model,
+				'max_tokens'  => 200,
+				'temperature' => 0.7,
+				'messages'    => array(
+					array( 'role' => 'system', 'content' => 'You are an expert SEO copywriter.' ),
+					array( 'role' => 'user',   'content' => $prompt ),
+				),
+			) ),
+		) );
+
+		return $this->parse_openai_response( $response );
+	}
+
+	// ──────────────────────────────────────────
+	// SHARED: OpenAI-compatible response parser (used by Groq + OpenAI)
+	// ──────────────────────────────────────────
+
+	private function parse_openai_response( $response ) {
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( 200 !== $code ) {
+			$msg = isset( $body['error']['message'] ) ? $body['error']['message'] : "API error ({$code})";
+			return new WP_Error( 'api_error', $msg );
+		}
+
+		$text = $body['choices'][0]['message']['content'] ?? '';
+		return $text ? trim( $text ) : new WP_Error( 'empty_response', 'API returned empty content.' );
+	}
+
+	// ──────────────────────────────────────────
+	// TEST CONNECTION
+	// ──────────────────────────────────────────
+
+	public function test_ai_connection( $request ) {
+		$general  = get_option( 'rp_seo_general', array() );
+		$provider = isset( $general['ai_provider'] ) ? $general['ai_provider'] : 'none';
+		$api_key  = isset( $general['ai_api_key'] ) ? $general['ai_api_key'] : '';
+
+		$test_prompt = 'Write a 5-word SEO title for a bakery. Output only the title.';
+		$result      = $this->call_provider( $provider, $api_key, $test_prompt, $general );
+
+		if ( is_wp_error( $result ) ) {
+			return rest_ensure_response( array(
+				'success'  => false,
+				'provider' => $provider,
+				'error'    => $result->get_error_message(),
+			) );
+		}
+
+		return rest_ensure_response( array(
+			'success'  => true,
+			'provider' => $provider,
+			'sample'   => $result,
+		) );
+	}
+
+	// ──────────────────────────────────────────
+	// RULE-BASED FALLBACK
+	// ──────────────────────────────────────────
 
 	private function generate_fallback( $post, $type, $focus_keyword ) {
 		$general  = get_option( 'rp_seo_general', array() );
@@ -174,13 +484,12 @@ class RankPilot_REST_API {
 			return substr( $title, 0, 60 );
 		}
 
-		// description
 		$content = wp_strip_all_tags( $post->post_content );
 		if ( $focus_keyword ) {
-			$pos  = stripos( $content, $focus_keyword );
+			$pos = stripos( $content, $focus_keyword );
 			if ( $pos !== false ) {
-				$start  = max( 0, $pos - 50 );
-				$desc   = substr( $content, $start, 155 );
+				$start = max( 0, $pos - 50 );
+				$desc  = substr( $content, $start, 155 );
 			} else {
 				$desc = substr( $content, 0, 155 );
 			}
@@ -189,6 +498,10 @@ class RankPilot_REST_API {
 		}
 		return trim( $desc ) . '…';
 	}
+
+	// ──────────────────────────────────────────
+	// SEO ANALYSIS
+	// ──────────────────────────────────────────
 
 	public function analyze_content( $request ) {
 		$post_id       = $request->get_param( 'post_id' );
@@ -269,7 +582,7 @@ class RankPilot_REST_API {
 			$checks[] = array( 'type' => 'warning', 'msg' => __( 'No meta description set.', 'rankpilot-seo' ) );
 		}
 
-		// 5. Keyword in URL
+		// 5. Keyword in URL slug
 		if ( $slug ) {
 			$possible++;
 			$slug_check = str_replace( array( '-', '_' ), ' ', $slug_lower );
@@ -281,7 +594,7 @@ class RankPilot_REST_API {
 			}
 		}
 
-		// 6. Keyword density
+		// 6. Keyword density in content
 		if ( $content ) {
 			$possible++;
 			$word_count = str_word_count( $content );
@@ -294,13 +607,13 @@ class RankPilot_REST_API {
 				$checks[] = array( 'type' => 'good', 'msg' => sprintf( __( 'Keyword density is good (%.1f%%, %d occurrence(s)).', 'rankpilot-seo' ), $density, $kw_count ) );
 				$score++;
 			} elseif ( $density > 2.5 ) {
-				$checks[] = array( 'type' => 'warning', 'msg' => sprintf( __( 'Keyword density is too high (%.1f%%). Avoid keyword stuffing.', 'rankpilot-seo' ), $density ) );
+				$checks[] = array( 'type' => 'warning', 'msg' => sprintf( __( 'Keyword density too high (%.1f%%). Avoid keyword stuffing.', 'rankpilot-seo' ), $density ) );
 			} else {
 				$checks[] = array( 'type' => 'info', 'msg' => sprintf( __( 'Keyword appears only %d time(s). Consider using it more.', 'rankpilot-seo' ), $kw_count ) );
 			}
 		}
 
-		// 7. Content length
+		// 7. Content word count
 		if ( $content ) {
 			$possible++;
 			$word_count = str_word_count( $content );
@@ -318,7 +631,7 @@ class RankPilot_REST_API {
 			$checks[] = array( 'type' => 'good', 'msg' => __( 'Featured image is set.', 'rankpilot-seo' ) );
 			$score++;
 		} else {
-			$checks[] = array( 'type' => 'warning', 'msg' => __( 'No featured image set. Images improve CTR in search results.', 'rankpilot-seo' ) );
+			$checks[] = array( 'type' => 'warning', 'msg' => __( 'No featured image. Images improve CTR in search results.', 'rankpilot-seo' ) );
 		}
 
 		// 9. Internal links
@@ -328,10 +641,10 @@ class RankPilot_REST_API {
 			$checks[] = array( 'type' => 'good', 'msg' => sprintf( __( 'Content contains %d link(s).', 'rankpilot-seo' ), $link_count ) );
 			$score++;
 		} else {
-			$checks[] = array( 'type' => 'info', 'msg' => __( 'No links found in content. Adding internal links helps SEO.', 'rankpilot-seo' ) );
+			$checks[] = array( 'type' => 'info', 'msg' => __( 'No links found. Internal links help distribute authority.', 'rankpilot-seo' ) );
 		}
 
-		// WooCommerce extra checks
+		// WooCommerce & other plugin checks
 		$checks = apply_filters( 'rp_seo_analysis_checks', $checks, $post_id );
 
 		$grade = 'poor';
@@ -352,8 +665,12 @@ class RankPilot_REST_API {
 		) );
 	}
 
+	// ──────────────────────────────────────────
+	// SETTINGS ENDPOINTS
+	// ──────────────────────────────────────────
+
 	public function get_settings( $request ) {
-		$group = sanitize_key( $request->get_param( 'group' ) );
+		$group   = sanitize_key( $request->get_param( 'group' ) );
 		$allowed = array( 'rp_seo_general', 'rp_seo_social', 'rp_seo_sitemap', 'rp_seo_breadcrumbs', 'rp_seo_woocommerce' );
 		if ( ! in_array( $group, $allowed, true ) ) {
 			return new WP_Error( 'invalid_group', 'Invalid settings group', array( 'status' => 400 ) );
@@ -362,7 +679,7 @@ class RankPilot_REST_API {
 	}
 
 	public function save_settings( $request ) {
-		$group = sanitize_key( $request->get_param( 'group' ) );
+		$group   = sanitize_key( $request->get_param( 'group' ) );
 		$allowed = array( 'rp_seo_general', 'rp_seo_social', 'rp_seo_sitemap', 'rp_seo_breadcrumbs', 'rp_seo_woocommerce' );
 		if ( ! in_array( $group, $allowed, true ) ) {
 			return new WP_Error( 'invalid_group', 'Invalid settings group', array( 'status' => 400 ) );

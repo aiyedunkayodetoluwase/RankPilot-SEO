@@ -149,7 +149,11 @@ class RankPilot_Admin {
 		$out['noindex_attachment']   = isset( $input['noindex_attachment'] ) ? 1 : 0;
 		$out['remove_wp_generator']  = isset( $input['remove_wp_generator'] ) ? 1 : 0;
 		$out['schema_type']          = in_array( $input['schema_type'] ?? '', array( 'Organization', 'Person' ), true ) ? $input['schema_type'] : 'Organization';
+		$allowed_providers           = array( 'none', 'groq', 'gemini', 'huggingface', 'ollama', 'anthropic', 'openai' );
+		$out['ai_provider']          = in_array( $input['ai_provider'] ?? '', $allowed_providers, true ) ? $input['ai_provider'] : 'none';
 		$out['ai_api_key']           = sanitize_text_field( $input['ai_api_key'] ?? '' );
+		$out['ai_model']             = sanitize_text_field( $input['ai_model'] ?? '' );
+		$out['ollama_url']           = esc_url_raw( $input['ollama_url'] ?? 'http://localhost:11434' );
 
 		// Flush rewrite rules after saving sitemap-related settings
 		add_action( 'shutdown', 'flush_rewrite_rules' );
