@@ -172,7 +172,7 @@ class RankPilot_REST_API {
 				'1. Between 50 and 60 characters total (count every character including spaces).',
 				'2. Include the focus keyword naturally near the beginning.',
 				'3. Be specific, benefit-driven, and click-worthy.',
-				'4. Output ONLY the title text — no quotes, no explanation, no extra lines.',
+				'4. Output ONLY the title text - no quotes, no explanation, no extra lines.',
 			) );
 		}
 
@@ -184,7 +184,7 @@ class RankPilot_REST_API {
 			'Page content: ' . $content,
 			$kw_line,
 			'',
-			'STRICT RULES (you MUST follow ALL of them — this is critical):',
+			'STRICT RULES (you MUST follow ALL of them - this is critical):',
 			'1. The description MUST be between 130 and 155 characters total (count every character including spaces and punctuation).',
 			'2. Include the focus keyword naturally in the first half of the description.',
 			'3. Describe the benefit or value the reader gets from the page.',
@@ -202,7 +202,7 @@ class RankPilot_REST_API {
 		$prev_len = mb_strlen( $previous_attempt );
 
 		return implode( "\n", array(
-			'Your previous attempt was only ' . $prev_len . ' characters — that is too short.',
+			'Your previous attempt was only ' . $prev_len . ' characters - that is too short.',
 			'',
 			'Write a NEW meta description for this page. You MUST write between 130 and 155 characters.',
 			'',
@@ -211,7 +211,7 @@ class RankPilot_REST_API {
 			'Focus keyword: ' . $kw,
 			'',
 			'COUNT CAREFULLY. A good 140-character description looks like this example (140 chars):',
-			'"Discover the best WordPress SEO plugin with sitemaps, schema, and redirects built in. Optimize every page and boost your rankings today."',
+			'Discover the best WordPress SEO plugin with sitemaps, schema, and redirects built in. Optimize every page and boost your rankings today.',
 			'',
 			'Now write one of similar length for this page. Include "' . $kw . '". End with an action phrase.',
 			'Output ONLY the description. No quotes. No explanation.',
@@ -224,13 +224,15 @@ class RankPilot_REST_API {
 	 */
 	private function enforce_length( $text, $type ) {
 		$text = trim( $text );
-		// Strip surrounding quotes the AI sometimes adds
-		$text = trim( $text, '"\'""''' );
+		// Strip surrounding quotes the AI sometimes adds (ASCII only - no Unicode in source)
+		$text = trim( $text, "\"'" );
+		// Also remove Unicode smart quotes using byte sequences
+		$text = str_replace( array( "\xe2\x80\x9c", "\xe2\x80\x9d", "\xe2\x80\x98", "\xe2\x80\x99" ), '', $text );
 		$text = trim( $text );
 
 		if ( 'title' === $type ) {
 			if ( mb_strlen( $text ) > 60 ) {
-				$text = mb_substr( $text, 0, 57 ) . '…';
+				$text = mb_substr( $text, 0, 57 ) . '...';
 			}
 			return $text;
 		}
@@ -240,7 +242,7 @@ class RankPilot_REST_API {
 			// Trim to last space before 155
 			$trimmed = mb_substr( $text, 0, 155 );
 			$last    = mb_strrpos( $trimmed, ' ' );
-			$text    = $last ? mb_substr( $trimmed, 0, $last ) . '…' : $trimmed . '…';
+			$text    = $last ? mb_substr( $trimmed, 0, $last ) . '...' : $trimmed . '...';
 		}
 
 		return $text;
@@ -591,7 +593,7 @@ class RankPilot_REST_API {
 		} else {
 			$desc = substr( $content, 0, 155 );
 		}
-		return trim( $desc ) . '…';
+		return trim( $desc ) . '...';
 	}
 
 	// ──────────────────────────────────────────
