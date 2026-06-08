@@ -1,0 +1,48 @@
+/* RankPilot SEO — Breadcrumbs */
+
+.rp-breadcrumbs {
+	font-size: 0.875em;
+	margin: 0 0 1em;
+}
+
+.rp-breadcrumbs__list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0;
+}
+
+.rp-breadcrumbs__item {
+	display: flex;
+	align-items: center;
+}
+
+.rp-breadcrumbs__item a {
+	color: inherit;
+	text-decoration: none;
+	opacity: 0.75;
+	transition: opacity .15s;
+}
+
+.rp-breadcrumbs__item a:hover {
+	opacity: 1;
+	text-decoration: underline;
+}
+
+.rp-breadcrumbs__item--current span,
+.rp-breadcrumbs__item--current strong {
+	opacity: 0.9;
+}
+
+.rp-breadcrumbs__sep {
+	margin: 0 4px;
+	opacity: 0.5;
+}
+
+.rp-breadcrumbs__prefix {
+	margin-right: 8px;
+	opacity: 0.6;
+}

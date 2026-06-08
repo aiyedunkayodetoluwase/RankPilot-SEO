@@ -1,0 +1,81 @@
+name: Release Plugin
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from plugin header
+        id: version
+        run: |
+          VERSION=$(grep -m1 "Version:" rankpilot-seo.php | sed 's/.*Version:[[:space:]]*//' | tr -d '[:space:]')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION"
+
+      - name: Check if tag already exists
+        id: tag_check
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          if git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag $TAG already exists — skipping release."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Tag $TAG is new — will create release."
+          fi
+
+      - name: Build plugin zip
+        if: steps.tag_check.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SLUG="rankpilot-seo"
+          ZIP_NAME="${SLUG}.zip"
+
+          # Create temp directory with correct folder name for WordPress
+          mkdir -p /tmp/build/${SLUG}
+
+          # Copy all plugin files (exclude dev files)
+          rsync -av \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.gitignore' \
+            --exclude='*.zip' \
+            . /tmp/build/${SLUG}/
+
+          # Build the zip with rankpilot-seo/ as root folder
+          cd /tmp/build
+          zip -r ${ZIP_NAME} ${SLUG}/
+          mv ${ZIP_NAME} $GITHUB_WORKSPACE/${ZIP_NAME}
+
+          echo "Built ${ZIP_NAME}"
+          ls -lh $GITHUB_WORKSPACE/${ZIP_NAME}
+
+      - name: Create GitHub Release
+        if: steps.tag_check.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ steps.version.outputs.version }}"
+          name: "RankPilot SEO v${{ steps.version.outputs.version }}"
+          body: |
+            ## RankPilot SEO v${{ steps.version.outputs.version }}
+
+            ### Installation / Update
+            WordPress will auto-detect this update. Go to **Plugins → Available Updates** and click **Update Now**.
+
+            Or download `rankpilot-seo.zip` below and upload via **Plugins → Add New → Upload Plugin**.
+          files: rankpilot-seo.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
