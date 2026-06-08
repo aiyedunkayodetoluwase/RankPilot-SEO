@@ -107,29 +107,97 @@
 /* Score */
 .rp-seo-score-wrap {
 	display: flex;
-	justify-content: flex-end;
-	padding-bottom: 8px;
+	align-items: center;
+	justify-content: space-between;
+	padding: 10px 14px;
+	background: #f8f8f8;
+	border-radius: 8px;
+	margin-bottom: 14px;
+	border: 1px solid #e5e5e5;
 }
 .rp-seo-score-circle {
 	display: flex;
 	align-items: center;
-	gap: 6px;
-	padding: 4px 10px;
-	border-radius: 20px;
-	background: #f5f5f5;
-	font-size: 12px;
-	font-weight: 600;
+	gap: 12px;
 }
+/* SVG ring */
+.rp-score-ring {
+	position: relative;
+	width: 52px;
+	height: 52px;
+	flex-shrink: 0;
+}
+.rp-score-ring svg {
+	transform: rotate(-90deg);
+}
+.rp-score-ring-track {
+	fill: none;
+	stroke: #e5e5e5;
+	stroke-width: 4;
+}
+.rp-score-ring-fill {
+	fill: none;
+	stroke-width: 4;
+	stroke-linecap: round;
+	stroke-dasharray: 125.66; /* 2π × 20 */
+	stroke-dashoffset: 125.66;
+	transition: stroke-dashoffset 0.5s ease, stroke 0.3s ease;
+}
+.rp-score-ring-fill.rp-ring-na   { stroke: #bbb; }
+.rp-score-ring-fill.rp-ring-poor { stroke: #e53e3e; }
+.rp-score-ring-fill.rp-ring-ok   { stroke: #f6ad55; }
+.rp-score-ring-fill.rp-ring-good { stroke: #38a169; }
+
+.rp-score-ring-text {
+	position: absolute;
+	top: 50%; left: 50%;
+	transform: translate(-50%, -50%);
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1;
+	text-align: center;
+	color: #333;
+}
+.rp-score-ring-text small {
+	display: block;
+	font-size: 8px;
+	font-weight: 500;
+	color: #777;
+	margin-top: 1px;
+}
+
+/* Score text info */
+.rp-score-info {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+.rp-score-grade-label {
+	font-size: 13px;
+	font-weight: 700;
+	color: #333;
+}
+.rp-score-grade-label.rp-score-na   { color: #888; }
+.rp-score-grade-label.rp-score-poor { color: #e53e3e; }
+.rp-score-grade-label.rp-score-ok   { color: #c77c00; }
+.rp-score-grade-label.rp-score-good { color: #38a169; }
+
+.rp-score-sub {
+	font-size: 11px;
+	color: #777;
+}
+
+/* Legacy dot (keep for readability badge compat) */
 .rp-score-dot {
 	width: 10px;
 	height: 10px;
 	border-radius: 50%;
 	display: inline-block;
 }
-.rp-score-na     { background: #bbb; }
-.rp-score-poor   { background: #e53e3e; }
-.rp-score-ok     { background: #f6ad55; }
-.rp-score-good   { background: #38a169; }
+.rp-score-na   { background: #bbb; }
+.rp-score-poor { background: #e53e3e; }
+.rp-score-ok   { background: #f6ad55; }
+.rp-score-good { background: #38a169; }
 
 /* SEO section */
 .rp-seo-section {

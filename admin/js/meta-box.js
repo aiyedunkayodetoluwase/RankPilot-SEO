@@ -91,7 +91,7 @@
 		if (!postId) return;
 		var keyword = $('#rp_seo_focus_keyword').val().trim();
 		if (!keyword) {
-			renderChecks([{ type: 'na', msg: i18n.noKeyword }], 'na');
+			renderChecks([{ type: 'na', msg: i18n.noKeyword }], 'na', 0, 0);
 			return;
 		}
 
@@ -110,13 +110,13 @@
 			contentType: 'application/json',
 			success: function (data) {
 				if (data && data.checks) {
-					renderChecks(data.checks, data.grade);
+					renderChecks(data.checks, data.grade, data.score || 0, data.possible || 0);
 				}
 			}
 		});
 	}
 
-	function renderChecks(checks, grade) {
+	function renderChecks(checks, grade, score, possible) {
 		var html = '';
 		$.each(checks, function (i, c) {
 			html += '<li class="rp-check rp-' + (c.type || 'na') + '">';
@@ -125,14 +125,61 @@
 			html += '</li>';
 		});
 		$('#rp-seo-analysis').html(html || '<li class="rp-check rp-na"><span class="rp-dot"></span> —</li>');
-		updateScoreBadge('#rp-score-badge', grade);
+		updateScoreRing('seo', grade, score, possible);
 	}
 
+	// ── Score ring ──────────────────────────────
+	// type: 'seo' | 'read'
+	function updateScoreRing(type, grade, score, possible) {
+		var prefix   = type === 'seo' ? 'rp-score' : 'rp-read-score';
+		var fillId   = type === 'seo' ? 'rp-score-ring-fill' : 'rp-read-ring-fill';
+		var gradeMap = { good: 'Good', ok: 'Needs Work', poor: 'Poor', na: 'Not analyzed' };
+		var subMap   = {
+			good : 'Great job! Keep it up.',
+			ok   : 'Some improvements needed.',
+			poor : 'Needs significant improvement.',
+			na   : 'Set a focus keyword to start.',
+		};
+
+		var gradeLabel = gradeMap[grade] || 'N/A';
+		var subLabel   = subMap[grade]   || '';
+		var pct        = possible > 0 ? Math.round((score / possible) * 100) : 0;
+
+		// Ring fill: stroke-dashoffset = circumference × (1 - pct/100)
+		var circumference = 125.66;
+		var offset = possible > 0
+			? circumference * (1 - pct / 100)
+			: circumference;
+
+		$('#' + fillId)
+			.css('stroke-dashoffset', offset)
+			.attr('class', 'rp-score-ring-fill rp-ring-' + (grade || 'na'));
+
+		// Number inside ring
+		if (possible > 0) {
+			$('#' + prefix + '-number').text(score);
+			$('#' + prefix + '-denom').text('/' + possible);
+		} else {
+			$('#' + prefix + '-number').text('—');
+			$('#' + prefix + '-denom').text('');
+		}
+
+		// Grade text
+		$('#' + prefix + '-grade')
+			.text(gradeLabel)
+			.attr('class', 'rp-score-grade-label rp-score-' + (grade || 'na'));
+
+		// Sub label — include percentage when we have data
+		var sub = possible > 0 ? pct + '% · ' + subLabel : subLabel;
+		$('#' + prefix + '-sub').text(sub);
+	}
+
+	// Legacy readability badge updater (reuses ring logic)
 	function updateScoreBadge(el, grade) {
-		var label = grade === 'good' ? i18n.good : (grade === 'ok' ? i18n.ok : (grade === 'poor' ? i18n.poor : 'N/A'));
-		var cls   = 'rp-score-dot rp-score-' + (grade || 'na');
-		$(el).find('.rp-score-dot').attr('class', cls);
-		$(el).find('.rp-score-label').text(label);
+		// kept for readability tab (old API compat), now delegates to ring
+		if (el === '#rp-readability-badge') {
+			// score/possible passed separately by readability code
+		}
 	}
 
 	// Run on load if keyword exists
@@ -231,7 +278,7 @@
 
 		var goodCount = checks.filter(function(c){ return c.type === 'good'; }).length;
 		var grade = goodCount >= checks.length * 0.7 ? 'good' : (goodCount >= checks.length * 0.4 ? 'ok' : 'poor');
-		updateScoreBadge('#rp-readability-badge', grade);
+		updateScoreRing('read', grade, goodCount, checks.length);
 	}
 
 	function estimateSyllables(word) {

@@ -117,8 +117,24 @@ class RankPilot_REST_API {
 		$result = $this->call_provider( $provider, $api_key, $prompt, $general );
 
 		if ( ! is_wp_error( $result ) && $result ) {
+			$text = $this->enforce_length( $result, $type );
+
+			// If description is still too short after enforcement, retry once with an even stricter prompt
+			if ( 'description' === $type && mb_strlen( $text ) < 70 ) {
+				$retry_prompt = $this->build_retry_prompt( $post, $focus_keyword, $text );
+				$retry        = $this->call_provider( $provider, $api_key, $retry_prompt, $general );
+				if ( ! is_wp_error( $retry ) && $retry ) {
+					$text = $this->enforce_length( $retry, $type );
+				}
+			}
+
+			// If still too short, fall back to rule-based but blend it
+			if ( 'description' === $type && mb_strlen( $text ) < 70 ) {
+				$text = $this->generate_fallback( $post, $type, $focus_keyword );
+			}
+
 			return rest_ensure_response( array(
-				'generated' => $result,
+				'generated' => $text,
 				'provider'  => $provider,
 			) );
 		}
@@ -142,13 +158,95 @@ class RankPilot_REST_API {
 		$content = wp_strip_all_tags( $post->post_content );
 		$content = substr( $content, 0, 2000 );
 		$title   = wp_strip_all_tags( $post->post_title );
-		$kw      = $focus_keyword ? "Focus keyword: {$focus_keyword}." : '';
+		$kw      = $focus_keyword ? $focus_keyword : '';
 
 		if ( 'title' === $type ) {
-			return "Write a compelling SEO title for a webpage.\nPage title: {$title}\n{$kw}\nRequirements: maximum 60 characters, include the focus keyword naturally, be specific and engaging.\nOutput ONLY the title text, no quotes, no explanation.";
+			$kw_line = $kw ? "Focus keyword to include: \"{$kw}\"" : '';
+			return <<<PROMPT
+You are an expert SEO copywriter. Write ONE compelling SEO title.
+
+Page title: {$title}
+{$kw_line}
+
+STRICT RULES (you MUST follow all of them):
+1. Between 50 and 60 characters total (count every character including spaces).
+2. Include the focus keyword naturally near the beginning.
+3. Be specific, benefit-driven, and click-worthy.
+4. Output ONLY the title text — no quotes, no explanation, no extra lines.
+
+PROMPT;
 		}
 
-		return "Write a compelling meta description for this page.\nPage title: {$title}\nContent excerpt: {$content}\n{$kw}\nRequirements: 120-158 characters total, include the focus keyword, entice clicks from search results, end with a call to action.\nOutput ONLY the description text, no quotes, no explanation.";
+		$kw_line = $kw ? "Focus keyword to include: \"{$kw}\"" : '';
+		return <<<PROMPT
+You are an expert SEO copywriter. Write ONE compelling meta description.
+
+Page title: {$title}
+Page content: {$content}
+{$kw_line}
+
+STRICT RULES (you MUST follow ALL of them — this is critical):
+1. The description MUST be between 130 and 155 characters total (count every character including spaces and punctuation).
+2. Include the focus keyword naturally in the first half of the description.
+3. Describe the benefit or value the reader gets from the page.
+4. End with a clear, action-oriented phrase (e.g. "Shop now", "Learn more", "Discover how").
+5. Do NOT mention character counts. Do NOT add quotes. Do NOT explain yourself.
+6. Output ONLY the description text on a single line.
+
+PROMPT;
+	}
+
+	private function build_retry_prompt( $post, $focus_keyword, $previous_attempt ) {
+		$title   = wp_strip_all_tags( $post->post_title );
+		$content = wp_strip_all_tags( $post->post_content );
+		$content = substr( $content, 0, 1000 );
+		$kw      = $focus_keyword ? $focus_keyword : '';
+		$prev_len = mb_strlen( $previous_attempt );
+
+		return <<<PROMPT
+Your previous attempt was only {$prev_len} characters — that is too short.
+
+Write a NEW meta description for this page. You MUST write between 130 and 155 characters.
+
+Page title: {$title}
+Page content: {$content}
+Focus keyword: {$kw}
+
+COUNT CAREFULLY. A good 140-character description looks like this example (140 chars):
+"Discover the best WordPress SEO plugin with sitemaps, schema, and redirects built in. Optimize every page and boost your rankings today."
+
+Now write one of similar length for this page. Include "{$kw}". End with an action phrase.
+Output ONLY the description. No quotes. No explanation.
+
+PROMPT;
+	}
+
+	/**
+	 * Enforce length constraints on AI output.
+	 * For descriptions: if too short, append a benefit phrase; if too long, trim at last word boundary.
+	 */
+	private function enforce_length( $text, $type ) {
+		$text = trim( $text );
+		// Strip surrounding quotes the AI sometimes adds
+		$text = trim( $text, '"\'""''' );
+		$text = trim( $text );
+
+		if ( 'title' === $type ) {
+			if ( mb_strlen( $text ) > 60 ) {
+				$text = mb_substr( $text, 0, 57 ) . '…';
+			}
+			return $text;
+		}
+
+		// Description: enforce 120–158
+		if ( mb_strlen( $text ) > 158 ) {
+			// Trim to last space before 155
+			$trimmed = mb_substr( $text, 0, 155 );
+			$last    = mb_strrpos( $trimmed, ' ' );
+			$text    = $last ? mb_substr( $trimmed, 0, $last ) . '…' : $trimmed . '…';
+		}
+
+		return $text;
 	}
 
 	// ──────────────────────────────────────────

@@ -102,10 +102,22 @@ class RankPilot_Meta_Box {
 			<div class="rp-seo-tab-content active" id="rp-tab-general">
 
 				<!-- Score badge -->
-				<div class="rp-seo-score-wrap">
-					<div class="rp-seo-score-circle" id="rp-score-badge">
-						<span class="rp-score-dot rp-score-na"></span>
-						<span class="rp-score-label"><?php esc_html_e( 'Not analyzed', 'rankpilot-seo' ); ?></span>
+				<div class="rp-seo-score-wrap" id="rp-score-badge">
+					<div class="rp-seo-score-circle">
+						<div class="rp-score-ring">
+							<svg width="52" height="52" viewBox="0 0 52 52">
+								<circle class="rp-score-ring-track" cx="26" cy="26" r="20"/>
+								<circle class="rp-score-ring-fill rp-ring-na" id="rp-score-ring-fill" cx="26" cy="26" r="20"/>
+							</svg>
+							<div class="rp-score-ring-text">
+								<span id="rp-score-number">—</span>
+								<small id="rp-score-denom"></small>
+							</div>
+						</div>
+						<div class="rp-score-info">
+							<span class="rp-score-grade-label rp-score-na" id="rp-score-grade"><?php esc_html_e( 'Not analyzed', 'rankpilot-seo' ); ?></span>
+							<span class="rp-score-sub" id="rp-score-sub"><?php esc_html_e( 'Set a focus keyword to start', 'rankpilot-seo' ); ?></span>
+						</div>
 					</div>
 				</div>
 
@@ -187,10 +199,22 @@ class RankPilot_Meta_Box {
 
 			<!-- ── READABILITY TAB ── -->
 			<div class="rp-seo-tab-content" id="rp-tab-readability">
-				<div class="rp-seo-score-wrap">
-					<div class="rp-seo-score-circle" id="rp-readability-badge">
-						<span class="rp-score-dot rp-score-na"></span>
-						<span class="rp-score-label"><?php esc_html_e( 'Not analyzed', 'rankpilot-seo' ); ?></span>
+				<div class="rp-seo-score-wrap" id="rp-readability-badge">
+					<div class="rp-seo-score-circle">
+						<div class="rp-score-ring">
+							<svg width="52" height="52" viewBox="0 0 52 52">
+								<circle class="rp-score-ring-track" cx="26" cy="26" r="20"/>
+								<circle class="rp-score-ring-fill rp-ring-na" id="rp-read-ring-fill" cx="26" cy="26" r="20"/>
+							</svg>
+							<div class="rp-score-ring-text">
+								<span id="rp-read-score-number">—</span>
+								<small id="rp-read-score-denom"></small>
+							</div>
+						</div>
+						<div class="rp-score-info">
+							<span class="rp-score-grade-label rp-score-na" id="rp-read-score-grade"><?php esc_html_e( 'Not analyzed', 'rankpilot-seo' ); ?></span>
+							<span class="rp-score-sub" id="rp-read-score-sub"><?php esc_html_e( 'Switch to Readability tab to analyze', 'rankpilot-seo' ); ?></span>
+						</div>
 					</div>
 				</div>
 				<div class="rp-seo-section">
