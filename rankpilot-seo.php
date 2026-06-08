@@ -3,7 +3,7 @@
  * Plugin Name:       RankPilot SEO
  * Plugin URI:        https://rankpilot.io/
  * Description:       Full-featured SEO plugin: meta optimization, XML sitemaps, breadcrumbs, structured data/schema, redirect manager, social previews, readability analysis, and WooCommerce SEO.
- * Version:           1.0.3
+ * Version:           1.0.4
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            RankPilot
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'RP_SEO_VERSION',       '1.0.3' );
+define( 'RP_SEO_VERSION',       '1.0.4' );
 define( 'RP_SEO_PLUGIN_DIR',    plugin_dir_path( __FILE__ ) );
 define( 'RP_SEO_PLUGIN_URL',    plugin_dir_url( __FILE__ ) );
 define( 'RP_SEO_PLUGIN_BASE',   plugin_basename( __FILE__ ) );

@@ -161,39 +161,37 @@ class RankPilot_REST_API {
 		$kw      = $focus_keyword ? $focus_keyword : '';
 
 		if ( 'title' === $type ) {
-			$kw_line = $kw ? "Focus keyword to include: \"{$kw}\"" : '';
-			return <<<PROMPT
-You are an expert SEO copywriter. Write ONE compelling SEO title.
-
-Page title: {$title}
-{$kw_line}
-
-STRICT RULES (you MUST follow all of them):
-1. Between 50 and 60 characters total (count every character including spaces).
-2. Include the focus keyword naturally near the beginning.
-3. Be specific, benefit-driven, and click-worthy.
-4. Output ONLY the title text — no quotes, no explanation, no extra lines.
-
-PROMPT;
+			$kw_line = $kw ? 'Focus keyword to include: "' . $kw . '"' : '';
+			return implode( "\n", array(
+				'You are an expert SEO copywriter. Write ONE compelling SEO title.',
+				'',
+				'Page title: ' . $title,
+				$kw_line,
+				'',
+				'STRICT RULES (you MUST follow all of them):',
+				'1. Between 50 and 60 characters total (count every character including spaces).',
+				'2. Include the focus keyword naturally near the beginning.',
+				'3. Be specific, benefit-driven, and click-worthy.',
+				'4. Output ONLY the title text — no quotes, no explanation, no extra lines.',
+			) );
 		}
 
-		$kw_line = $kw ? "Focus keyword to include: \"{$kw}\"" : '';
-		return <<<PROMPT
-You are an expert SEO copywriter. Write ONE compelling meta description.
-
-Page title: {$title}
-Page content: {$content}
-{$kw_line}
-
-STRICT RULES (you MUST follow ALL of them — this is critical):
-1. The description MUST be between 130 and 155 characters total (count every character including spaces and punctuation).
-2. Include the focus keyword naturally in the first half of the description.
-3. Describe the benefit or value the reader gets from the page.
-4. End with a clear, action-oriented phrase (e.g. "Shop now", "Learn more", "Discover how").
-5. Do NOT mention character counts. Do NOT add quotes. Do NOT explain yourself.
-6. Output ONLY the description text on a single line.
-
-PROMPT;
+		$kw_line = $kw ? 'Focus keyword to include: "' . $kw . '"' : '';
+		return implode( "\n", array(
+			'You are an expert SEO copywriter. Write ONE compelling meta description.',
+			'',
+			'Page title: ' . $title,
+			'Page content: ' . $content,
+			$kw_line,
+			'',
+			'STRICT RULES (you MUST follow ALL of them — this is critical):',
+			'1. The description MUST be between 130 and 155 characters total (count every character including spaces and punctuation).',
+			'2. Include the focus keyword naturally in the first half of the description.',
+			'3. Describe the benefit or value the reader gets from the page.',
+			'4. End with a clear, action-oriented phrase (e.g. "Shop now", "Learn more", "Discover how").',
+			'5. Do NOT mention character counts. Do NOT add quotes. Do NOT explain yourself.',
+			'6. Output ONLY the description text on a single line.',
+		) );
 	}
 
 	private function build_retry_prompt( $post, $focus_keyword, $previous_attempt ) {
@@ -203,22 +201,21 @@ PROMPT;
 		$kw      = $focus_keyword ? $focus_keyword : '';
 		$prev_len = mb_strlen( $previous_attempt );
 
-		return <<<PROMPT
-Your previous attempt was only {$prev_len} characters — that is too short.
-
-Write a NEW meta description for this page. You MUST write between 130 and 155 characters.
-
-Page title: {$title}
-Page content: {$content}
-Focus keyword: {$kw}
-
-COUNT CAREFULLY. A good 140-character description looks like this example (140 chars):
-"Discover the best WordPress SEO plugin with sitemaps, schema, and redirects built in. Optimize every page and boost your rankings today."
-
-Now write one of similar length for this page. Include "{$kw}". End with an action phrase.
-Output ONLY the description. No quotes. No explanation.
-
-PROMPT;
+		return implode( "\n", array(
+			'Your previous attempt was only ' . $prev_len . ' characters — that is too short.',
+			'',
+			'Write a NEW meta description for this page. You MUST write between 130 and 155 characters.',
+			'',
+			'Page title: ' . $title,
+			'Page content: ' . $content,
+			'Focus keyword: ' . $kw,
+			'',
+			'COUNT CAREFULLY. A good 140-character description looks like this example (140 chars):',
+			'"Discover the best WordPress SEO plugin with sitemaps, schema, and redirects built in. Optimize every page and boost your rankings today."',
+			'',
+			'Now write one of similar length for this page. Include "' . $kw . '". End with an action phrase.',
+			'Output ONLY the description. No quotes. No explanation.',
+		) );
 	}
 
 	/**
